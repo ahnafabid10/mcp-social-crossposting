@@ -8,6 +8,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { SocialMediaManager } from './manager.js';
 import { PlatformId } from './types.js';
+import { generateStudyImage } from './services/imageGenerator.js';
 
 const manager = new SocialMediaManager();
 
@@ -168,6 +169,63 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['platforms', 'videoPath', 'title', 'description'],
         },
       },
+      {
+        name: 'generate_study_social_image',
+        description:
+          'Generates a high-quality commercial social media image for study visa & higher education topics. Strictly enforces NO humans and NO animals (focuses on study desks, passports, visas, university campuses, books, acceptance letters). Works with an OpenAI API key (DALL-E 3) or falls back automatically to free high-res AI generation. Can optionally auto-post across social platforms.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            topic: {
+              type: 'string',
+              description:
+                'Specific topic or destination (e.g. "UK study visa", "Scholarship announcement", "Canada admission letter", or leave blank for a random study aesthetic).',
+            },
+            aspectRatio: {
+              type: 'string',
+              enum: ['1:1', '16:9', '9:16'],
+              description: 'Aspect ratio (default: "1:1" for feed / square ads).',
+            },
+            apiKey: {
+              type: 'string',
+              description:
+                'Optional OpenAI API key (overrides .env OPENAI_API_KEY). If not provided, automatically uses the free high-res AI generator.',
+            },
+            autoPost: {
+              type: 'boolean',
+              description:
+                'If true, automatically posts the generated image to target social media platforms.',
+            },
+            platforms: {
+              type: 'array',
+              items: {
+                type: 'string',
+                enum: [
+                  'all',
+                  'facebook',
+                  'instagram',
+                  'threads',
+                  'bluesky',
+                  'mastodon',
+                  'twitter',
+                  'tiktok',
+                  'youtube',
+                ],
+              },
+              description: 'Target platforms if autoPost is true.',
+            },
+            caption: {
+              type: 'string',
+              description: 'Caption/status message if autoPost is true.',
+            },
+            tags: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Hashtags to append if autoPost is true.',
+            },
+          },
+        },
+      },
     ],
   };
 });
@@ -277,6 +335,63 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               {
                 summary: `Dispatched reel/short upload to ${results.length} platform(s).`,
                 results,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    }
+
+    if (name === 'generate_study_social_image') {
+      const {
+        topic,
+        aspectRatio = '1:1',
+        apiKey,
+        autoPost = false,
+        platforms = ['all'],
+        caption = 'Dream big, study abroad! 🎓✈️ Official study visa consultations open now. #StudyAbroad #VisaSuccess #HigherEducation',
+        tags = ['StudyAbroad', 'VisaConsultancy', 'HigherEducation'],
+      } = args as {
+        topic?: string;
+        aspectRatio?: '1:1' | '16:9' | '9:16';
+        apiKey?: string;
+        autoPost?: boolean;
+        platforms?: string[];
+        caption?: string;
+        tags?: string[];
+      };
+
+      const imgResult = await generateStudyImage({ topic, aspectRatio, apiKey });
+
+      let postResults = null;
+      if (autoPost) {
+        const target = platforms.includes('all') ? 'all' : (platforms as PlatformId[]);
+        postResults = await manager.postMedia(target, {
+          mediaPath: imgResult.localPath,
+          mediaType: 'image',
+          content: caption,
+          tags,
+        });
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                status: 'success',
+                image: {
+                  localPath: imgResult.localPath,
+                  fileName: imgResult.fileName,
+                  provider: imgResult.provider,
+                  promptUsed: imgResult.promptUsed,
+                  themeConstraint: 'Strictly NO humans, NO animals. Pure study & higher education aesthetic.',
+                },
+                autoPostTriggered: autoPost,
+                postResults,
               },
               null,
               2

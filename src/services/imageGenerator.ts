@@ -119,17 +119,26 @@ export async function generateStudyImage(
     prompt
   )}?width=${width}&height=${height}&seed=${seed}&nologo=true`;
 
-  const imgResponse = await axios.get(pollinationsUrl, {
-    responseType: 'arraybuffer',
-    timeout: 45000,
-  });
+  try {
+    const imgResponse = await axios.get(pollinationsUrl, {
+      responseType: 'arraybuffer',
+      timeout: 45000,
+    });
 
-  fs.writeFileSync(localPath, Buffer.from(imgResponse.data));
+    fs.writeFileSync(localPath, Buffer.from(imgResponse.data));
 
-  return {
-    localPath,
-    fileName,
-    promptUsed: prompt,
-    provider: 'pollinations-free',
-  };
+    return {
+      localPath,
+      fileName,
+      promptUsed: prompt,
+      provider: 'pollinations-free',
+    };
+  } catch (freeErr: any) {
+    const errorDetail = freeErr?.response?.data
+      ? Buffer.from(freeErr.response.data).toString('utf-8')
+      : freeErr.message;
+    throw new Error(
+      `Image generation failed (${errorDetail}). TIP: For unlimited instant generations, please add your OpenAI API Key to .env (OPENAI_API_KEY=sk-...) or pass the apiKey parameter to this tool.`
+    );
+  }
 }

@@ -86,11 +86,15 @@ Your AI assistant in the IDE has access to these 4 tools:
 3. **`post_social_media`**: Publishes images or standard videos with captions.
 4. **`upload_social_reel_or_short`**: Uploads short-form vertical video (Reels, Shorts, TikTok).
    - Example: `platforms: ["youtube", "facebook", "instagram"]`, `videoPath: "C:/path/to/reel.mp4"`, `title: "Demo"`
+5. **`generate_study_social_image`**: Generates high-res study visa / higher education images with a strict **NO humans, NO animals** policy (focusing on aesthetic study desks, passports, visas, books, empty gothic campuses).
+   - Supports OpenAI DALL-E 3 (`OPENAI_API_KEY`) with seamless free AI generator fallback.
+   - Can optionally auto-post across all connected social channels in one command (`autoPost: true`).
 
 ---
 
 ## 💬 Example Prompts in Your IDE
 
 - *"Check which social media platforms are currently connected."*
+- *"Generate a random study visa promotional image (no people) and post it to Facebook and Twitter with a captivating caption!"*
 - *"Post this announcement to Twitter, Bluesky, and Threads: 'Excited to announce our new project launch! 🚀' with tags #tech #launch"*
 - *"Upload this video `C:/Videos/ai_demo.mp4` as a Reel/Short to YouTube and Facebook with title 'Antigravity IDE in Action'!"*
