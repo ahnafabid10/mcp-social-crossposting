@@ -74,6 +74,7 @@ export const config = {
   },
 
   imageGen: {
+    geminiApiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '',
     openaiApiKey: process.env.OPENAI_API_KEY || process.env.IMAGE_API_KEY || '',
   },
 };

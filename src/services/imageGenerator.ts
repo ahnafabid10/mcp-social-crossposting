@@ -7,13 +7,14 @@ export interface GenerateStudyImageOptions {
   topic?: string;
   aspectRatio?: '1:1' | '16:9' | '9:16';
   apiKey?: string;
+  geminiApiKey?: string;
 }
 
 export interface GeneratedImageResult {
   localPath: string;
   fileName: string;
   promptUsed: string;
-  provider: 'openai-dalle3' | 'pollinations-free';
+  provider: 'google-imagen3' | 'openai-dalle3' | 'pollinations-free';
 }
 
 const CURATED_STUDY_PROMPTS = [
@@ -48,10 +49,12 @@ export function buildStudyPrompt(topic?: string): string {
 export async function generateStudyImage(
   options: GenerateStudyImageOptions = {}
 ): Promise<GeneratedImageResult> {
-  const { topic, aspectRatio = '1:1', apiKey } = options;
+  const { topic, aspectRatio = '1:1', apiKey, geminiApiKey } = options;
   const prompt = buildStudyPrompt(topic);
 
-  const effectiveKey = apiKey || config.imageGen.openaiApiKey;
+  const effectiveGeminiKey = geminiApiKey || config.imageGen.geminiApiKey || (apiKey?.startsWith('AIza') ? apiKey : undefined);
+  const effectiveOpenAIKey = config.imageGen.openaiApiKey || (apiKey?.startsWith('sk-') ? apiKey : apiKey);
+
   const outputDir = path.resolve(process.cwd(), 'generated_images');
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -61,8 +64,45 @@ export async function generateStudyImage(
   const fileName = `study_${timestamp}.jpg`;
   const localPath = path.join(outputDir, fileName);
 
-  // 1. If OpenAI API Key is provided, use DALL-E 3
-  if (effectiveKey) {
+  // 1. Google Gemini / Imagen 3 (Nano Banana Architecture)
+  if (effectiveGeminiKey) {
+    try {
+      const response = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${effectiveGeminiKey}`,
+        {
+          instances: [{ prompt }],
+          parameters: {
+            sampleCount: 1,
+            aspectRatio,
+            personGeneration: 'DONT_ALLOW',
+            outputOptions: { mimeType: 'image/jpeg' },
+          },
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 60000,
+        }
+      );
+
+      const b64 = response.data?.predictions?.[0]?.bytesBase64Encoded;
+      if (b64) {
+        fs.writeFileSync(localPath, Buffer.from(b64, 'base64'));
+        return {
+          localPath,
+          fileName,
+          promptUsed: prompt,
+          provider: 'google-imagen3',
+        };
+      }
+    } catch (err: any) {
+      console.warn(
+        `[ImageGen] Google Imagen 3 (Nano Banana) failed (${err?.response?.data?.error?.message || err?.message || err}). Trying OpenAI fallback...`
+      );
+    }
+  }
+
+  // 2. OpenAI DALL-E 3
+  if (effectiveOpenAIKey) {
     try {
       const sizeMap: Record<string, '1024x1024' | '1792x1024' | '1024x1792'> = {
         '1:1': '1024x1024',
@@ -83,7 +123,7 @@ export async function generateStudyImage(
         },
         {
           headers: {
-            Authorization: `Bearer ${effectiveKey}`,
+            Authorization: `Bearer ${effectiveOpenAIKey}`,
             'Content-Type': 'application/json',
           },
           timeout: 60000,
@@ -107,7 +147,7 @@ export async function generateStudyImage(
     }
   }
 
-  // 2. Free Fallback: High Quality Generator (Pollinations / Flux)
+  // 3. Free Fallback: High Quality Generator (Pollinations / Flux)
   const dimMap: Record<string, { width: number; height: number }> = {
     '1:1': { width: 1024, height: 1024 },
     '16:9': { width: 1280, height: 720 },
@@ -138,7 +178,7 @@ export async function generateStudyImage(
       ? Buffer.from(freeErr.response.data).toString('utf-8')
       : freeErr.message;
     throw new Error(
-      `Image generation failed (${errorDetail}). TIP: For unlimited instant generations, please add your OpenAI API Key to .env (OPENAI_API_KEY=sk-...) or pass the apiKey parameter to this tool.`
+      `Image generation failed (${errorDetail}). TIP: Please add GEMINI_API_KEY or OPENAI_API_KEY to .env for high-res instant AI generation.`
     );
   }
 }
